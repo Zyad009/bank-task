@@ -1,0 +1,11 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class PendingTransaction extends Model
+{
+    protected $fillable = ['data'];
+    protected $casts = [ 'data' => 'array'];
+}
