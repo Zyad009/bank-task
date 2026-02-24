@@ -1,59 +1,110 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+﻿# Bank Task API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel API project for handling incoming bank transactions in two formats (`PayTech` and `Acme`) with two ingestion modes:
+- `ingestion = 1`: process immediately and store in `transactions`.
+- `ingestion = 0`: queue in `pending_transactions` and ingest later when re-enabled.
 
-## About Laravel
+## Overview
+- A bank endpoint generates mock transaction strings.
+- The system receives transactions (webhook or local simulation), parses them, and stores them.
+- There is an endpoint to toggle ingestion on/off.
+- When ingestion is turned back on, pending batches are moved automatically to `transactions`.
+- There is an endpoint to generate transfer XML.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Data Model
+### `settings`
+- Contains the `ingestion` key (seeded by `SettingSeeder`, default `1`).
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### `transactions`
+- `amount`
+- `refrance_key` (unique)
+- `date`
+- `notes` (JSON)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### `pending_transactions`
+- `data` (JSON batch of raw transaction strings)
 
-## Learning Laravel
+## API Endpoints
+Base URL: `http://127.0.0.1:8000/api`
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### 1) Generate bank transactions
+- `GET /get-transactions`
+- Query params:
+- `type`: `PayTech` or `Acme` (default `PayTech`)
+- `count`: number of transactions (optional)
+- `webhook`: `1` or `0` (default `1`)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Examples:
+- Generate and process directly:
+`GET /api/get-transactions?type=PayTech&count=5&webhook=1`
+- Generate and return raw data only:
+`GET /api/get-transactions?type=Acme&count=3&webhook=0`
 
-## Laravel Sponsors
+### 2) Receive transactions webhook
+- `POST /transactions-webhook`
+- Body:
+```json
+{
+  "data": [
+    "20260224100,00#1234567812345678#note/debt payment march/internal_reference/A462JE81",
+    "20260224//1234567812345678//250,50"
+  ]
+}
+```
+- Response:
+```json
+{ "message": "Transactions received successfully" }
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### 3) Toggle ingestion
+- `PATCH /change-ingestion`
+- Flips ingestion between `0` and `1`.
+- On switching to `1`, all rows from `pending_transactions` are processed and removed.
 
-### Premium Partners
+### 4) Generate transfer XML
+- `POST /sending-money`
+- Body:
+```json
+{
+  "reference": "REF-1001",
+  "date": "2026-02-24",
+  "amount": 1500.75,
+  "currency": "USD",
+  "sender_account": "ACC-001",
+  "receiver_bank_code": "BANK-US-01",
+  "receiver_account": "ACC-999",
+  "beneficiary_name": "John Doe",
+  "notes": ["invoice 44", "priority"],
+  "payment_type": 1,
+  "charge_details": "OUR"
+}
+```
+- Response: XML string.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Supported Raw Formats
+### PayTech
+Pattern:
+`YYYYMMDD + amount(with comma) + # + reference + # + key/value pairs separated by /`
 
-## Contributing
+Example:
+`20260224100,00#1234567812345678#note/debt payment march/internal_reference/A462JE81`
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Acme
+Pattern:
+`YYYYMMDD//reference//amount(with comma)`
 
-## Code of Conduct
+Example:
+`20260224//1234567812345678//250,50`
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Quick Test Flow
+1. Make sure `ingestion` is `1`.
+2. Call `GET /api/get-transactions?type=PayTech&count=5&webhook=1`.
+3. Check `transactions` table.
+4. Call `PATCH /api/change-ingestion` to disable ingestion.
+5. Call generation endpoint again and verify rows go to `pending_transactions`.
+6. Call `PATCH /api/change-ingestion` again to re-enable and ingest pending rows.
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Notes
+- Field name is `refrance_key` in code and DB (not `reference_key`).
+- Duplicate references are ignored using `insertOrIgnore` + unique key.
+- No authentication is currently applied to API endpoints.
