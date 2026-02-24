@@ -12,5 +12,9 @@ Route::patch('change-ingestion' , [WalletController::class , 'changeIngestion'])
 Route::post('transactions-webhook', [WalletController::class, 'receiveTransactions'])
   ->name('transactions.webhook');
 
+Route::get('/test', function () {
+    return response()->json(['message' => 'API is working']);
+});
 
+Route::post('sending-money', [WalletController::class, 'sendingMoney']);
 //
