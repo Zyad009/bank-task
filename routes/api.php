@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Route;
 
 // Bank Routes
 Route::get('get-transactions', [ BankController::class , 'transactions']);
-Route::post('transactions-webhook', [ WalletController::class , 'receiveTransactions']);
+Route::patch('change-ingestion' , [WalletController::class , 'changeIngestion']);
+Route::post('transactions-webhook', [WalletController::class, 'receiveTransactions'])
+  ->name('transactions.webhook');
 
 
 //

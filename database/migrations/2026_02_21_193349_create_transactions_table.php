@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->decimal('amount')->unsigned();
-            $table->string('refrance_key');
+            $table->string('refrance_key')->unique();
             $table->date('date');
             $table->json('notes');
             $table->timestamps();

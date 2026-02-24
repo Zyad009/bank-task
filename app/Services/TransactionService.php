@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\PendingTransaction;
+use App\Models\Setting;
 use App\Models\Transaction;
 use Carbon\Carbon;
 
@@ -14,14 +16,13 @@ class TransactionService
 
   public function receiveTransactions(array $transactions)
   {
-    foreach ($transactions as $transaction) {
-      $type = str_contains($transaction, '#') ? 'PayTech' : 'Acme';
-       match ($type) {
-        'PayTech' => $this->PayTechMethodStore($transaction),
-        'Acme' => $this->AcmeMethodStore($transaction),
-      };
+    $availableAction = Setting::where('key', 'ingestion')->first()->value;
+
+    if ($availableAction) {
+      $this->paymentProcessing($transactions);
+    } else {
+      $this->pendingTransactions($transactions);
     }
-    Transaction::insert($this->transations);
   }
 
 
@@ -41,7 +42,7 @@ class TransactionService
     }
 
     $dateYmd = substr($start, 0, 8);
-    $amountBeforFomate =substr($start, 8);
+    $amountBeforFomate = substr($start, 8);
     $amountAfterFormate = $this->getAmountDb($amountBeforFomate);
 
     // عرفتها عن طريق البحث createFromFormat
@@ -71,7 +72,7 @@ class TransactionService
       'date' => $date,
       'amount' => $amountAfterFormate,
       'refrance_key' => $middle,
-      'notes' => json_encode( []),
+      'notes' => json_encode([]),
       'created_at' => now(),
       'updated_at' => now(),
     ];
@@ -88,8 +89,38 @@ class TransactionService
     $this->transations[] = $data;
   }
 
-  //عملتها عشان ال (,) مش بتتقبل في ال db ولازم تبقى  (.)
-  private function getAmountDb($mount){
+  //عملتها عشان ال (,) مش بتتقبل في ال db ولازم تبقى  (.) 
+  private function getAmountDb($mount)
+  {
     return str_replace(',', '.', $mount);
   }
+
+  public function ingestionTransactions()
+  {
+    $transactions = PendingTransaction::all();
+    foreach ($transactions as $transaction) {
+      $this->paymentProcessing(json_decode($transaction->data));
+      $transaction->delete();
+    }
+  }
+
+  public function pendingTransactions(array $data)
+  {
+    PendingTransaction::create([
+      'data' => json_encode($data)
+    ]);
+  }
+
+  private function paymentProcessing(array $transactions)
+  {
+    foreach ($transactions as $transaction) {
+      $type = str_contains($transaction, '#') ? 'PayTech' : 'Acme';
+      match ($type) {
+        'PayTech' => $this->PayTechMethodStore($transaction),
+        'Acme' => $this->AcmeMethodStore($transaction),
+      };
+    }
+    Transaction::insertOrIgnore($this->transations);
+  }
+
 }
