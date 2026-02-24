@@ -23,10 +23,10 @@ class WalletController extends Controller
 
             $this->TransactionService->receiveTransactions($data['data']);
 
-            return response()->json(['message' => 'Transactions received successfully']);
+            return successResponse(message: 'Transactions received successfully');
         } catch (\Throwable $th) {
             Log::error('WalletController::receiveTransactions error: ' . $th->getMessage());
-            return response()->json(['message_error' => $th->getMessage()], $th->getCode() ?: 500);
+            return errorResponse( message: 'Error receiving transactions',  th:$th);
         }
     }
 
@@ -41,10 +41,10 @@ class WalletController extends Controller
                 $this->TransactionService->ingestionTransactions();
             }
 
-            return response()->json(['message' => 'change Successfully']);
+            return successResponse(message: 'Change ingestion status successfully');
         } catch (\Throwable $th) {
             Log::error('WalletController::changeIngestion error: ' . $th->getMessage());
-            return response()->json(['message_error' => $th->getMessage()], 400);
+            return errorResponse( message: 'Error changing ingestion status',  th:$th);
         }
     }
 
@@ -54,11 +54,10 @@ class WalletController extends Controller
             $data = $request->validated();
             $xml  = $this->generateXmlService->generate($data);
 
-            // return response($xml, 200)->header('Content-Type', 'application/xml; charset=utf-8');
-            return response($xml, 200);
+            return response($xml, 200)->header('Content-Type', 'application/xml');
         } catch (\Throwable $th) {
             Log::error('WalletController::sendingMoney error: ' . $th->getMessage());
-            return response()->json(['message_error' => $th->getMessage()], 400);
+            return errorResponse( message: 'Error sending money',  th:$th);
         }
     }
 }

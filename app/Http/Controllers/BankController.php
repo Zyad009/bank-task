@@ -18,7 +18,7 @@ class BankController extends Controller
         $type  = request()->query('type', 'PayTech');
         $count = request()->query('count');
         // عملته بس عشان لو عايزه يكمل ويعمل العمليات او لا ويرج الداتا فقط وده بس عشان التجربه و الاختبار 
-        $webhook = request()->query('webhook',  1);
+        $webhook = request()->query('webhook', 0);
 
         try {
             $data = $this->bankService->genrateTransaction($type, $count);
@@ -38,10 +38,10 @@ class BankController extends Controller
                     'count'   => count($data),
                 ]);
             }
-            return response()->json(['data' => $data]);
+            return successResponse($data, 'Transactions generated successfully');
         } catch (\Throwable $th) {
             Log::error('Error generating transactions: ' . $th->getMessage());
-            return response()->json(['message_error' => $th->getMessage()], 400);
+            return errorResponse( message: 'Error generating transactions',  th:$th);
         }
     }
 }
